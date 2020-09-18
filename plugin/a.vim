@@ -71,7 +71,8 @@ endfunction
 
 " Add all the default extensions
 " Mappings for C and C++
-call <SID>AddAlternateExtensionMapping('h',"c,cpp,cxx,cc,CC")
+call <SID>AddAlternateExtensionMapping('inl',"h")
+call <SID>AddAlternateExtensionMapping('h',"cc,cpp,cxx,c,CC,inl")
 call <SID>AddAlternateExtensionMapping('H',"C,CPP,CXX,CC")
 call <SID>AddAlternateExtensionMapping('hpp',"cpp,c")
 call <SID>AddAlternateExtensionMapping('HPP',"CPP,C")
@@ -557,12 +558,12 @@ comm! -nargs=? -bang IHS call AlternateOpenFileUnderCursor("h<bang>", <f-args>)
 comm! -nargs=? -bang IHV call AlternateOpenFileUnderCursor("v<bang>", <f-args>)
 comm! -nargs=? -bang IHT call AlternateOpenFileUnderCursor("t<bang>", <f-args>)
 comm! -nargs=? -bang IHN call AlternateOpenNextFile("<bang>")
-imap <Leader>ih <ESC>:IHS<CR>
-nmap <Leader>ih :IHS<CR>
-imap <Leader>is <ESC>:IHS<CR>:A<CR>
-nmap <Leader>is :IHS<CR>:A<CR>
-imap <Leader>ihn <ESC>:IHN<CR>
-nmap <Leader>ihn :IHN<CR>
+" imap <Leader>ih <ESC>:IHS<CR>
+" nmap <Leader>ih :IHS<CR>
+" imap <Leader>is <ESC>:IHS<CR>:A<CR>
+" nmap <Leader>is :IHS<CR>:A<CR>
+" imap <Leader>ihn <ESC>:IHN<CR>
+" nmap <Leader>ihn :IHN<CR>
 
 "function! <SID>PrintList(theList) 
 "   let n = 1
@@ -643,37 +644,7 @@ comm! -nargs=? -bang AN call NextAlternate("<bang>")
 " History  : Updated code to handle buffernames using just the
 "            filename and not the path.
 function! <SID>BufferOrFileExists(fileName)
-   let result = 0
-
-   let lastBuffer = bufnr("$")
-   let i = 1
-   while i <= lastBuffer
-     if <SID>EqualFilePaths(expand("#".i.":p"), a:fileName)
-       let result = 2
-       break
-     endif
-     let i = i + 1
-   endwhile
-
-   if (!result) 
-      let bufName = fnamemodify(a:fileName,":t")
-      let memBufName = bufname(bufName)
-      if (memBufName != "")
-         let memBufBasename = fnamemodify(memBufName, ":t")
-         if (bufName == memBufBasename)
-            let result = 2
-         endif
-      endif
-
-      if (!result)
-         let result  = bufexists(bufName) || bufexists(a:fileName) || filereadable(a:fileName)
-      endif
-   endif
-
-   if (!result)
-      let result = filereadable(a:fileName)
-   endif
-   return result
+   return filereadable(a:fileName)
 endfunction
 
 " Function : FindOrCreateBuffer (PRIVATE)
@@ -699,125 +670,25 @@ endfunction
 function! <SID>FindOrCreateBuffer(fileName, doSplit, findSimilar)
   " Check to see if the buffer is already open before re-opening it.
   let FILENAME = escape(a:fileName, ' ')
-  let bufNr = -1
-  let lastBuffer = bufnr("$")
-  let i = 1
-  if (a:findSimilar) 
-     while i <= lastBuffer
-       if <SID>EqualFilePaths(expand("#".i.":p"), a:fileName)
-         let bufNr = i
-         break
-       endif
-       let i = i + 1
-     endwhile
-
-     if (bufNr == -1)
-        let bufName = bufname(a:fileName)
-        let bufFilename = fnamemodify(a:fileName,":t")
-
-        if (bufName == "")
-           let bufName = bufname(bufFilename)
-        endif
-
-        if (bufName != "")
-           let tail = fnamemodify(bufName, ":t")
-           if (tail != bufFilename)
-              let bufName = ""
-           endif
-        endif
-        if (bufName != "")
-           let bufNr = bufnr(bufName)
-           let FILENAME = bufName
-        endif
-     endif
-  endif
-
   if (g:alternateRelativeFiles == 1)                                            
         let FILENAME = fnamemodify(FILENAME, ":p:.")
   endif
 
   let splitType = a:doSplit[0]
   let bang = a:doSplit[1]
-  if (bufNr == -1)
-     " Buffer did not exist....create it
-     let v:errmsg=""
-     if (splitType == "h")
-        silent! execute ":split".bang." " . FILENAME
-     elseif (splitType == "v")
-        silent! execute ":vsplit".bang." " . FILENAME
-     elseif (splitType == "t")
-        silent! execute ":tab split".bang." " . FILENAME
-     else
-        silent! execute ":e".bang." " . FILENAME
-     endif
-     if (v:errmsg != "")
-        echo v:errmsg
-     endif
+  " Buffer did not exist....create it
+  let v:errmsg=""
+  if (splitType == "h")
+     silent! execute ":split".bang." " . FILENAME
+  elseif (splitType == "v")
+     silent! execute ":vsplit".bang." " . FILENAME
+  elseif (splitType == "t")
+     silent! execute ":tab split".bang." " . FILENAME
   else
-
-     " Find the correct tab corresponding to the existing buffer
-     let tabNr = -1
-     " iterate tab pages
-     for i in range(tabpagenr('$'))
-        " get the list of buffers in the tab
-        let tabList =  tabpagebuflist(i + 1)
-        let idx = 0
-        " iterate each buffer in the list
-        while idx < len(tabList)
-           " if it matches the buffer we are looking for...
-           if (tabList[idx] == bufNr)
-              " ... save the number
-              let tabNr = i + 1
-              break
-           endif
-           let idx = idx + 1
-        endwhile
-        if (tabNr != -1)
-           break
-        endif
-     endfor
-     " switch the the tab containing the buffer
-     if (tabNr != -1)
-        execute "tabn ".tabNr
-     endif
-
-     " Buffer was already open......check to see if it is in a window
-     let bufWindow = bufwinnr(bufNr)
-     if (bufWindow == -1) 
-        " Buffer was not in a window so open one
-        let v:errmsg=""
-        if (splitType == "h")
-           silent! execute ":sbuffer".bang." " . FILENAME
-        elseif (splitType == "v")
-           silent! execute ":vert sbuffer " . FILENAME
-        elseif (splitType == "t")
-           silent! execute ":tab sbuffer " . FILENAME
-        else
-           silent! execute ":buffer".bang." " . FILENAME
-        endif
-        if (v:errmsg != "")
-           echo v:errmsg
-        endif
-     else
-        " Buffer is already in a window so switch to the window
-        execute bufWindow."wincmd w"
-        if (bufWindow != winnr()) 
-           " something wierd happened...open the buffer
-           let v:errmsg=""
-           if (splitType == "h")
-              silent! execute ":split".bang." " . FILENAME
-           elseif (splitType == "v")
-              silent! execute ":vsplit".bang." " . FILENAME
-           elseif (splitType == "t")
-              silent! execute ":tab split".bang." " . FILENAME
-           else
-              silent! execute ":e".bang." " . FILENAME
-           endif
-           if (v:errmsg != "")
-              echo v:errmsg
-           endif
-        endif
-     endif
+     silent! execute ":e".bang." " . FILENAME
+  endif
+  if (v:errmsg != "")
+     echo v:errmsg
   endif
 endfunction
 
